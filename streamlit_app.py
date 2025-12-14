@@ -334,7 +334,6 @@ def main():
     st.markdown("---")
     
     # 3. 顯示 Gemini 生成的文字內容
-    # 3. 顯示 Gemini 生成的文字內容
     if llm_result:
         st.header("3. 品牌風格 Moodboard 內容")
         
@@ -346,71 +345,16 @@ def main():
 
         st.subheader("詳細顏色分析 (Color Analysis)")
         
-        analysis_items = llm_result.get("Color_Analysis", [])
-
-        if analysis_items:
-            
-            # --- 使用 HTML/Markdown 建立自定義表格以顯示色塊 ---
-            
-            # 使用更簡潔的 CSS 塊，並確保它在整個 HTML 結構的頂部
-            html_content = """
-            <style>
-                .color-block {
-                    width: 30px; /* 色塊寬度 */
-                    height: 30px; /* 色塊高度 */
-                    border: 1px solid #ccc; /* 邊框 */
-                    border-radius: 4px; /* 圓角 */
-                    display: inline-block; /* 行內區塊 */
-                    vertical-align: middle; /* 垂直居中 */
-                }
-                .analysis-table {
-                    width: 100%;
-                    border-collapse: collapse; /* 消除邊框間隙 */
-                    margin-top: 15px;
-                }
-                .analysis-table th, .analysis-table td {
-                    padding: 12px 10px;
-                    text-align: left;
-                    border-bottom: 1px solid #ddd;
-                }
-                .analysis-table th {
-                    background-color: #f0f2f6; /* Streamlit 淺灰色背景 */
-                }
-            </style>
-            
-            <table class="analysis-table">
-                <thead>
-                    <tr>
-                        <th style="width: 10%;">色票</th>
-                        <th style="width: 20%;">Hex Code</th>
-                        <th style="width: 70%;">分析與作用 (Gemini Analysis)</th>
-                    </tr>
-                </thead>
-                <tbody>
-            """
-            
-            # 迭代生成每一行內容
-            for item in analysis_items:
-                hex_code = item.get("hex", "#FFFFFF")
-                analysis = item.get("analysis", "AI 未提供分析內容")
-                
-                # 創建色塊的 HTML 元素
-                color_block_html = f'<div class="color-block" style="background-color: {hex_code};"></div>'
-                
-                html_content += f"""
-                <tr>
-                    <td>{color_block_html}</td>
-                    <td><code>{hex_code}</code></td>
-                    <td>{analysis}</td>
-                </tr>
-                """
-            
-            # 關閉表格標籤
-            html_content += "</tbody></table>"
-            
-            # 渲染整個 HTML 內容
-            st.markdown(html_content, unsafe_allow_html=True)
-            
+        # 使用 DataFrame/Table 顯示顏色分析
+        analysis_data = []
+        for item in llm_result.get("Color_Analysis", []):
+            analysis_data.append({
+                "Hex Code": item.get("hex", ""),
+                "分析與作用": item.get("analysis", "無分析")
+            })
+        
+        if analysis_data:
+            st.table(analysis_data)
         else:
             st.warning("AI 未能提供顏色分析內容。")
 
