@@ -299,6 +299,24 @@ def main():
         st.subheader("萃取色票面板")
         fig_palette = create_palette_figure(colors)
         st.pyplot(fig_palette, use_container_width=True)
+
+        # --- 新增內容：顯示風格標籤（作為中介數據展示） ---
+        st.subheader("中介數據：色彩意象標籤")
+        
+        # 創建一個可展開的區塊，用於技術展示
+        with st.expander("點擊查看 K-means 顏色提取的原始風格標籤 (供 AI 參考)"):
+            tag_data = []
+            for c, name, tags in final_color_data:
+                tag_data.append({
+                    "Hex Code": rgb_to_hex(c),
+                    "名稱": name.capitalize(),
+                    "風格標籤 (Tags)": ", ".join(tags)
+                })
+            
+            # 使用 DataFrame 顯示
+            st.dataframe(tag_data, hide_index=True)
+
+        # --- 新增內容結束 ---
         
         # Gemini AI 生成
         with st.spinner('🎨 正在呼叫 Gemini AI 生成品牌氛圍描述...'):
