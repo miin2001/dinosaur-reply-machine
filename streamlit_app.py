@@ -166,7 +166,7 @@ with col1:
         
         # 這裡設定字體大小為 18px (您可以根據需求調整這個數值，例如 20px, 24px)
         st.markdown(
-            f'<p style="font-size: 18px; font-weight: bold; color: #FF4B4B;">{display_emotion_text}</p>', 
+            f'<p style="font-size: 18px; font-weight: bold; color: #000000;">{display_emotion_text}</p>', 
             unsafe_allow_html=True
         )
 
