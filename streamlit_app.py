@@ -113,7 +113,7 @@ parent_message = st.text_area(
 )
 
 # 語音輸入的替代方案
-st.markdown("---")
+#st.markdown("---")
 st.caption("我們將專注於文字輸入和 AI 邏輯。")
 
 
