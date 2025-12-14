@@ -343,18 +343,79 @@ def main():
         st.markdown(f"**核心關鍵字 (Keywords):** **`{keywords}`**")
         st.info(vibe_desc) # 用 info 框顯示氛圍描述，視覺上更突出
 
+        # 3. 顯示 Gemini 生成的文字內容
+    if llm_result:
+        st.header("3. 品牌風格 Moodboard 內容")
+        
+        keywords = "｜".join(llm_result.get("Brand_Keywords", ["無關鍵字"]))
+        vibe_desc = llm_result.get("Brand_Vibe_Description", "無描述")
+        
+        st.markdown(f"**核心關鍵字 (Keywords):** **`{keywords}`**")
+        st.info(vibe_desc) # 用 info 框顯示氛圍描述，視覺上更突出
+
         st.subheader("詳細顏色分析 (Color Analysis)")
         
-        # 使用 DataFrame/Table 顯示顏色分析
-        analysis_data = []
-        for item in llm_result.get("Color_Analysis", []):
-            analysis_data.append({
-                "Hex Code": item.get("hex", ""),
-                "分析與作用": item.get("analysis", "無分析")
-            })
-        
-        if analysis_data:
-            st.table(analysis_data)
+        analysis_items = llm_result.get("Color_Analysis", [])
+
+        if analysis_items:
+            
+            # --- 使用 HTML/Markdown 建立自定義表格以顯示色塊 ---
+            
+            # 1. 建立 HTML 表格的頭部
+            table_header = """
+            <style>
+                .color-block {
+                    width: 30px; /* 色塊寬度 */
+                    height: 30px; /* 色塊高度 */
+                    border: 1px solid #ccc; /* 邊框 */
+                    border-radius: 4px; /* 圓角 */
+                    display: inline-block; /* 行內區塊 */
+                    vertical-align: middle; /* 垂直居中 */
+                    margin-right: 10px;
+                }
+                .analysis-table td {
+                    vertical-align: top; /* 確保文字從頂部開始 */
+                    padding: 10px 8px !important; /* 增加單元格內邊距 */
+                }
+            </style>
+            
+            <table class="analysis-table">
+                <thead>
+                    <tr>
+                        <th style="width: 15%; text-align: left;">色票 (Visual)</th>
+                        <th style="width: 15%; text-align: left;">Hex Code</th>
+                        <th style="width: 70%; text-align: left;">分析與作用 (Gemini Analysis)</th>
+                    </tr>
+                </thead>
+                <tbody>
+            """
+            
+            table_rows = []
+            
+            # 2. 迭代生成每一行內容
+            for item in analysis_items:
+                hex_code = item.get("hex", "#FFFFFF")
+                analysis = item.get("analysis", "AI 未提供分析內容")
+                
+                # 創建色塊的 HTML 元素
+                color_block_html = f'<div class="color-block" style="background-color: {hex_code};"></div>'
+                
+                row_html = f"""
+                <tr>
+                    <td>{color_block_html}</td>
+                    <td><code>{hex_code}</code></td>
+                    <td>{analysis}</td>
+                </tr>
+                """
+                table_rows.append(row_html)
+                
+            # 3. 組合所有內容並渲染
+            table_footer = "</tbody></table>"
+            full_html_table = table_header + "".join(table_rows) + table_footer
+            
+            # 必須使用 unsafe_allow_html=True 來渲染 HTML 和 CSS 樣式
+            st.markdown(full_html_table, unsafe_allow_html=True)
+            
         else:
             st.warning("AI 未能提供顏色分析內容。")
 
