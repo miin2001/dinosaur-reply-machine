@@ -89,6 +89,11 @@ def generate_dinosaur_parent_response(parent_message: str) -> str:
 
 st.set_page_config(page_title="🦖 恐龍家長專業回覆機", layout="wide")
 
+# 確保所有 st.session_state 變數在使用前都被定義
+if 'ai_reply' not in st.session_state:
+    st.session_state.ai_reply = "尚未收到任何回覆，請在上方輸入家長訊息並點擊送出。"
+
+
 # 初始化 Session State 來儲存狀態和回覆
 #if 'ai_reply' not in st.session_state:
 #   st.session_state.ai_reply = "等待家長訊息中..."
