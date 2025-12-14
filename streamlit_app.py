@@ -114,8 +114,7 @@ parent_message = st.text_area(
 
 # 語音輸入的替代方案
 st.markdown("---")
-st.warning("⚠️ Streamlit 本身不直接支援瀏覽器語音輸入。若需語音，建議使用 Streamlit 擴充元件或電腦系統的語音轉文字功能。")
-st.caption("為簡化專題，我們將專注於文字輸入和 AI 邏輯。")
+st.caption("我們將專注於文字輸入和 AI 邏輯。")
 
 
 # 送出按鈕
