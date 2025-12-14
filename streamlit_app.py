@@ -1,181 +1,344 @@
 import streamlit as st
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
 import os
+import json
 from google import genai
 from google.genai import types
+import matplotlib.font_manager as fm
 
-# --- 1. 配置與核心 AI 邏輯 ---
+# --- I. 常量和輔助函式定義 (保持核心邏輯) ---
 
-# 嘗試從 Streamlit Secrets 或環境變數讀取 API Key
-api_key = None
-if 'GEMINI_API_KEY' in st.secrets:
-    api_key = st.secrets['GEMINI_API_KEY']
-elif os.environ.get('GEMINI_API_KEY'):
-    api_key = os.environ.get('GEMINI_API_KEY')
+# 常用代表性顏色（可以自行擴增）
+COLOR_NAMES = {
+    "white": (255, 255, 255), "black": (0, 0, 0), "gray": (128, 128, 128),
+    "red": (220, 20, 60), "orange": (255, 140, 0), "yellow": (255, 215, 0),
+    "green": (34, 139, 34), "blue": (30, 144, 255), "purple": (147, 112, 219),
+    "pink": (255, 182, 193), "brown": (139, 69, 19),
+    "beige": (245, 245, 220), "navy": (0, 0, 128), "olive": (85, 107, 47)
+}
 
-if not api_key:
-    st.error("找不到 GEMINI_API_KEY。請檢查 Streamlit Secrets 或環境變數。")
-    st.stop() # 確保在沒有 key 時停止運行
+def rgb_to_hex(rgb):
+    """輔助函式：將 RGB 轉換為 Hex 碼"""
+    return '#%02x%02x%02x' % tuple(rgb)
 
-@st.cache_resource
-def get_gemini_client():
-    """快取 Gemini Client，避免重複初始化。"""
-    try:
-        return genai.Client(api_key=api_key)
-    except Exception as e:
-        # 這裡不應該 st.error 和 st.stop，讓上層呼叫處理
-        raise RuntimeError(f"初始化 Gemini 失敗：{e}")
+def closest_color_name(rgb):
+    """計算最接近的定義顏色名稱"""
+    r, g, b = rgb
+    min_dist = float("inf")
+    closest_name = None
+    for name, value in COLOR_NAMES.items():
+        vr, vg, vb = value
+        dist = (r - vr)**2 + (g - vg)**2 + (b - vb)**2
+        if dist < min_dist:
+            min_dist = dist
+            closest_name = name
+    return closest_name
 
-
-# 設定系統提示基礎 (基礎角色與行為規範)
-SYSTEM_INSTRUCTION_HUMOR = (
-    "你是一位極度毒舌且擁有黑色幽默的諷刺大師。你的任務是為老師生成一段用於**情緒發洩**的內部回覆。"
-    "回覆風格：冷面幽默、諷刺、一本正經地講荒謬的話，目的讓老師感到舒壓。"
-    "幽默策略：使用誇張、反問、邏輯拆解，不使用正式公文語氣，字數控制在 150 字元以內。"
-)
-
-def analyze_emotion(message: str) -> str:
-    """
-    呼叫 Gemini API，專門判斷訊息中的核心情緒。
-    回傳範例: "憤怒|要求"
-    """
-    client = get_gemini_client()
+def color_style_tags(rgb):
+    """根據色彩學屬性判斷風格標籤 (使用優化邏輯)"""
+    r, g, b = rgb
+    tags = []
     
-    # 嚴格的提示詞，要求模型只輸出關鍵情緒詞
-    emotion_prompt = (
-        "請仔細分析以下家長訊息，判斷其中最強烈且最相關的情緒和意圖。 "
-        "你只能從以下選項中選擇一個或多個，並用 | 符號連接，不允許任何額外解釋和前綴。\n"
-        "選項: [憤怒, 焦慮, 不滿, 質疑, 無助, 要求, 抱怨, 平靜, 感謝]\n"
-        "家長訊息:\n"
-        f"---{message}---"
+    brightness = (r + g + b) / 3
+    chroma = max(r, g, b) - min(r, g, b)
+
+    # 冷暖色
+    if b > r and b > g:
+        tags.append("cool")
+    elif r > b and g > b:
+         tags.append("warm")
+    else: 
+         tags.append("neutral") 
+
+    # 明亮 vs 暗色
+    if brightness > 200:
+        tags.append("bright")
+    elif brightness < 60:
+        tags.append("dark")
+        
+    # 鮮豔 vs 低彩度
+    if chroma > 100:
+         tags.append("vivid")
+    elif chroma < 30:
+         tags.append("muted")
+
+    # 高級感：低彩度深色
+    if brightness < 120 and chroma < 50:
+        tags.append("luxury")
+
+    # 自然色
+    if (r > 120 and g > 100 and b < 80 and chroma > 20):
+         tags.append("natural") 
+
+    return tags
+
+def find_chinese_font():
+    """嘗試自動尋找常用的中文字體路徑"""
+    common_fonts = [
+        '/System/Library/Fonts/PingFang.ttc',           # macOS
+        '/System/Library/Fonts/STHeiti Light.ttc',      # macOS
+        'C:/Windows/Fonts/msjh.ttc',                    # Windows (微軟正黑體)
+        '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc'  # Linux (文泉驛)
+    ]
+    for font_path in common_fonts:
+        if os.path.exists(font_path):
+            return font_path
+    return None
+
+def setup_chinese_font():
+    """設定 Matplotlib 使用的中文字體"""
+    font_path = find_chinese_font()
+    if font_path:
+        zh_font = fm.FontProperties(fname=font_path, size=10)
+        plt.rcParams['font.family'] = zh_font.get_name()
+    else:
+        # 如果找不到，設定回退字體
+        plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'DejaVu Sans']
+        plt.rcParams['axes.unicode_minus'] = False # 解決負號亂碼
+
+# --- II. 核心功能函式 ---
+
+# 避免每次運行時都重新執行 K-means，使用 st.cache_data 提高效率
+@st.cache_data
+def extract_colors(image, k=5):
+    """K-means 顏色提取 (加入 random_state 和亮度排序)"""
+    img = image.reshape((-1, 3))
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init='auto')
+    kmeans.fit(img)
+
+    colors = kmeans.cluster_centers_.astype(int)
+    
+    # 按亮度排序 (Luminance)
+    # L = 0.299*R + 0.587*G + 0.114*B (常用公式)
+    luminances = np.dot(colors, [0.299, 0.587, 0.114]) 
+    sorted_indices = np.argsort(luminances)
+    
+    return colors[sorted_indices]
+
+# 避免每次運行時都重新呼叫 Gemini API
+@st.cache_data
+def generate_brand_moodboard_content(color_data, api_key):
+    """
+    使用 Gemini API 根據顏色數據生成品牌關鍵字和氛圍描述。
+    """
+    # 初始化 Client
+    try:
+        # Key 從參數傳入
+        client = genai.Client(api_key=api_key) 
+    except Exception as e:
+        # 在 Streamlit 應用中，最好拋出更清晰的錯誤
+        raise ConnectionError(f"API Client 初始化失敗，Key 無效或網路錯誤: {e}")
+        
+    color_info_list = []
+    for rgb, name, tags in color_data:
+        color_info_list.append({
+            "hex": rgb_to_hex(rgb),
+            "name": name.capitalize(),
+            "style_tags": tags
+        })
+        
+    # Prompt 設計
+    color_input_str = json.dumps(color_info_list, ensure_ascii=False, indent=2)
+    
+    prompt = f"""
+    你是一位頂尖的品牌策略顧問和色彩心理學專家。
+    請根據以下的色票資訊，為一個新品牌生成一份品牌形象的草稿。
+
+    色票數據：
+    {color_input_str}
+
+    請生成以下內容，並**嚴格以 Markdown 格式的 JSON 區塊**輸出。
+    
+    1. **Brand_Keywords (列表, 5-7個)**：根據整體色調帶來的聯想，列出品牌核心關鍵字 (e.g., 奢華, 自然, 科技, 溫暖)。
+    2. **Brand_Vibe_Description (字串, 150字以內)**：綜合所有顏色，寫一段精煉的品牌氛圍描述，說明品牌給人的整體感受和情感連結。
+    3. **Color_Analysis (列表)**：針對**每一個**色票，生成一段簡短的分析 (約30字)，說明該顏色在品牌中的作用和象徵意義。
+
+    輸出格式範例:
+    ```json
+    {{
+      "Brand_Keywords": ["...", "..."],
+      "Brand_Vibe_Description": "...",
+      "Color_Analysis": [
+        {{ "hex": "#...", "analysis": "..." }},
+        {{ "hex": "#...", "analysis": "..." }}
+      ]
+    }}
+    ```
+    """
+
+    # 呼叫 Gemini API
+    response = client.models.generate_content(
+        model='gemini-2.5-flash', 
+        contents=prompt
     )
     
-    config = types.GenerateContentConfig(temperature=0.1) # 溫度設低，要求精確性
-    
-    try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=emotion_prompt,
-            config=config
-        )
-        # 清理並回傳結果
-        return response.text.strip().replace('"', '').replace("'", "")
+    json_text = response.text.strip()
+    if json_text.startswith("```json"):
+        json_text = json_text.lstrip("```json").rstrip("```").strip()
         
-    except Exception as e:
-        return f"分析失敗: {e}"
+    return json.loads(json_text)
 
+# --- III. Matplotlib 繪圖函式 (專為 Streamlit 優化) ---
 
-def generate_dinosaur_parent_response(parent_message: str) -> str:
-    """呼叫 Gemini API，生成幽默回覆。"""
+def create_palette_figure(colors):
+    """
+    創建一個只包含色票、Hex 碼和名稱的 Matplotlib Figure。
+    """
+    # 建立 Matplotlib 圖表
+    fig, ax = plt.subplots(figsize=(10, 1.8))
     
-    client = get_gemini_client()
+    palette_height = 50
+    width_per_color = 100 # 增加色塊寬度
+    palette = np.zeros((palette_height, colors.shape[0] * width_per_color, 3), dtype=np.uint8)
     
-    config = types.GenerateContentConfig(
-        system_instruction=SYSTEM_INSTRUCTION_HUMOR,
-        temperature=0.6,
+    for i, color in enumerate(colors):
+        start_x = i * width_per_color
+        end_x = (i+1) * width_per_color
+        palette[:, start_x:end_x] = color
+        
+        hex_code = rgb_to_hex(color)
+        color_name = closest_color_name(color).capitalize()
+        
+        # 顯示 Hex 碼
+        ax.text(start_x + width_per_color/2, palette_height + 5, hex_code, 
+                 ha='center', va='top', fontsize=10, color='black')
+        # 顯示顏色名稱
+        ax.text(start_x + width_per_color/2, palette_height + 20, color_name, 
+                 ha='center', va='top', fontsize=10, color='black')
+
+    ax.imshow(palette)
+    ax.set_title("K-means 萃取色票 (Color Palette)", fontsize=12)
+    ax.axis('off')
+    ax.set_ylim(palette_height + 40, 0) # 調整 y 軸範圍以容納文字
+    
+    plt.tight_layout()
+    return fig
+
+# --- IV. Streamlit 應用程式主體 ---
+
+def main():
+    # 設置中文字體 (在應用程式開始時執行一次)
+    setup_chinese_font()
+    
+    # Streamlit 網頁設定
+    st.set_page_config(
+        page_title="圖片情緒板生成器 (Image Moodboard Generator)", 
+        layout="wide"
     )
+    
+    st.title("🎨 AI 圖片情緒板與品牌風格生成器")
+    st.markdown("上傳一張圖片，利用 K-means 提取核心色票，並透過 Gemini AI 分析色彩意象。")
 
+    # --- 關鍵變動：從 st.secrets 讀取 API Key ---
     try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=parent_message,
-            config=config,
+        # 從 Streamlit Cloud 的 Secrets 中讀取 Key
+        # 假設您的 Key 名稱是 GEMINI_API_KEY
+        api_key = st.secrets["GEMINI_API_KEY"] 
+    except Exception:
+        # 如果 Key 沒設置，給予警告
+        st.error("❌ Gemini API Key 未在 Streamlit Secrets 中設定！請檢查 `.streamlit/secrets.toml` 文件或 Streamlit Cloud 應用程式設定。")
+        return
+    # --- 關鍵變動結束 ---
+
+    # 側邊欄輸入區 (只保留 K 值和圖片上傳)
+    with st.sidebar:
+        st.header("參數與設定")
+        
+        # 圖片上傳區
+        uploaded_file = st.file_uploader(
+            "選擇一張圖片 (.jpg, .png)", 
+            type=["jpg", "jpeg", "png"]
         )
-        return response.text
         
+        # K 值選擇
+        k_clusters = st.slider("選擇色票數量 (K 值)", 3, 10, 5, 1)
+
+    # 主內容區塊
+    
+    if uploaded_file is None:
+        st.info("請在側邊欄上傳圖片以開始分析。")
+        return
+
+    # 1. 讀取與顯示圖像
+    try:
+        # 讀取上傳的圖片
+        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+        img = cv2.imdecode(file_bytes, 1)
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     except Exception as e:
-        # 在這裡捕獲錯誤並顯示
-        st.error(f"❌ 生成回覆失敗：{e}")
-        return "很抱歉，系統目前無法處理您的請求。"
+        st.error(f"圖像讀取失敗: {e}")
+        return
 
+    # 使用 Streamlit 欄位佈局
+    col1, col2 = st.columns([1, 2])
 
-# --- 2. Streamlit 網頁界面 ---
+    with col1:
+        st.header("1. 原始輸入")
+        st.image(img_rgb, caption=uploaded_file.name, use_column_width=True)
 
-st.set_page_config(page_title="🦖 恐龍家長專業回覆機", layout="wide")
-
-# 確保所有 st.session_state 變數在使用前都被定義
-if 'ai_reply' not in st.session_state:
-    st.session_state.ai_reply = "尚未收到任何回覆，請在上方輸入家長訊息並點擊送出。"
-if 'parent_emotion' not in st.session_state:
-    st.session_state.parent_emotion = "未分析"
-    st.session_state.emotion_icon = "❓"
-
-st.title("🦖 恐龍家長回覆機")
-st.markdown("---")
-
-
-# 恐龍家長輸入區
-parent_message = st.text_area(
-    "請輸入恐龍家長訊息：", 
-    height=150, 
-    placeholder="例如：老師，我兒子說他功課已經寫完了，你們一定要他檢查三次是在浪費時間！請取消這個規定！"
-)
-
-# 送出按鈕
-if st.button("送出訊息給 AI 老師"):
-    if parent_message:
-        # 1. 情緒分析步驟
-        with st.spinner("🧠 正在進行情緒分析..."):
-            emotion_result = analyze_emotion(parent_message)
-            st.session_state.parent_emotion = emotion_result
+    # 2. 執行分析
+    with col2:
+        st.header("2. 色彩與意象分析")
         
-        # 2. 呼叫幽默回覆生成
-        with st.spinner("⏳ 正在生成幽默諷刺回覆..."):
-            ai_response = generate_dinosaur_parent_response(parent_message)
-            st.session_state.ai_reply = ai_response
+        # K-means 顏色提取
+        with st.spinner(f'正在進行 K-means 顏色提取 (K={k_clusters})...'):
+            # Streamlit 的 @st.cache_data 會幫助優化性能
+            colors = extract_colors(img_rgb, k=k_clusters) 
             
-        st.rerun() # 觸發 rerun 立即更新所有狀態和顯示結果
-    else:
-        st.error("請輸入訊息！")
-
-
-# --- 3. 結果顯示區 ---
-
-st.markdown("---")
-
-col1, col2 = st.columns([1, 2])
-
-# 情緒分析結果顯示 (左側)
-# 情緒分析結果顯示 (左側)
-with col1:
-    st.subheader("家長情緒分析")
-    
-    # ... (emotion_map 保持不變)
-    emotion_map = {
-        "憤怒": "🔴 怒火中燒", 
-        "焦慮": "🟠 擔憂不安", 
-        "要求": "🟡 強勢要求", 
-        "不滿": "🔵 不吐不快",
-        "無助": "🟣 束手無策",
-        "平靜": "🟢 理性溝通",
-        "感謝": "⭐ 感謝讚許",
-        "質疑": "❓ 提出質疑",
-        "抱怨": "💢 情緒性抱怨"
-    }
-
-    # 處理多個情緒或未分析
-    emotions = st.session_state.parent_emotion.split('|')
-    display_emotion_text = " / ".join([emotion_map.get(e.strip(), e.strip()) for e in emotions])
-    
-    if st.session_state.parent_emotion == "未分析":
-        st.info("請輸入訊息並點擊送出。")
-    elif "分析失敗" in st.session_state.parent_emotion:
-        st.warning("情緒分析失敗。")
-    else:
-        # 使用 st.markdown 配合 CSS 調整字體大小
-        st.text("偵測到的主要情緒:") # 顯示 Label，使用正常大小的字體
+        # 整理 LLM 輸入資料
+        final_color_data = []
+        for c in colors:
+            name = closest_color_name(c)
+            tags = color_style_tags(c)
+            final_color_data.append((c, name, tags))
+            
+        # 顯示色票圖
+        st.subheader("萃取色票面板")
+        fig_palette = create_palette_figure(colors)
+        st.pyplot(fig_palette, use_container_width=True)
         
-        # 這裡設定字體大小為 18px (您可以根據需求調整這個數值，例如 20px, 24px)
-        st.markdown(
-            f'<p style="font-size: 18px; font-weight: bold; color: #000000;">{display_emotion_text}</p>', 
-            unsafe_allow_html=True
-        )
+        # Gemini AI 生成
+        with st.spinner('🎨 正在呼叫 Gemini AI 生成品牌氛圍描述...'):
+            try:
+                # 關鍵變動：將 api_key 變數傳給函式
+                llm_result = generate_brand_moodboard_content(final_color_data, api_key) 
+            except ConnectionError as ce:
+                # 顯示錯誤，但程式碼不會暴露 Key
+                st.error(f"Gemini AI 呼叫失敗。請確認 Streamlit Secrets 中的 Key 是否有效且網路連線正常。錯誤詳情: {ce}") 
+                return
+            except Exception as e:
+                st.error(f"Gemini AI 生成內容失敗，可能是 AI 輸出格式錯誤或 Key 權限問題。錯誤: {e}")
+                return
 
-# AI 老師回覆區 (右側)
-with col2:
-    st.subheader("AI 老師的回覆：")
-    st.info(st.session_state.ai_reply)
+    st.markdown("---")
+    
+    # 3. 顯示 Gemini 生成的文字內容
+    if llm_result:
+        st.header("3. 品牌風格 Moodboard 內容")
+        
+        keywords = "｜".join(llm_result.get("Brand_Keywords", ["無關鍵字"]))
+        vibe_desc = llm_result.get("Brand_Vibe_Description", "無描述")
+        
+        st.markdown(f"**核心關鍵字 (Keywords):** **`{keywords}`**")
+        st.info(vibe_desc) # 用 info 框顯示氛圍描述，視覺上更突出
 
-# 底部說明
-st.markdown("---")
-st.caption("本工具目的為教師情緒抒發及分析，回覆內容幽默、諷刺，請勿將其用於正式對外溝通。")
-st.caption("本專題應用程式使用 Streamlit 和 Google Gemini API 串接。")
+        st.subheader("詳細顏色分析 (Color Analysis)")
+        
+        # 使用 DataFrame/Table 顯示顏色分析
+        analysis_data = []
+        for item in llm_result.get("Color_Analysis", []):
+            analysis_data.append({
+                "Hex Code": item.get("hex", ""),
+                "分析與作用": item.get("analysis", "無分析")
+            })
+        
+        if analysis_data:
+            st.table(analysis_data)
+        else:
+            st.warning("AI 未能提供顏色分析內容。")
+
+if __name__ == '__main__':
+    main()

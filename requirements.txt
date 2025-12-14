@@ -1,3 +1,21 @@
-streamlit
-google-genai
-python-dotenv
+#streamlit
+#google-genai
+#python-dotenv
+
+# 核心 Web/AI/資料科學 函式庫
+streamlit>=1.36.0
+google-genai>=0.16.0
+opencv-python>=4.9.0.80
+scikit-learn>=1.5.0
+matplotlib>=3.9.0
+numpy>=1.26.4
+
+# 間接但必需的依賴項
+# Streamlit 依賴 Pandas 處理表格顯示 (st.table)
+pandas>=2.2.2
+# 圖像處理基礎，OpenCV 和 Matplotlib 經常依賴
+Pillow>=10.3.0
+# Google GenAI 客戶端所需的依賴項
+protobuf>=5.27.1
+# 用於確保 Matplotlib 的中文字體處理
+fonttools>=4.53.0
