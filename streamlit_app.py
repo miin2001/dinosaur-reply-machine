@@ -230,7 +230,7 @@ def main():
     )
     
     st.title("🎨 AI 圖片情緒板與品牌風格生成器")
-    st.markdown("上傳一張圖片，利用 K-means 提取核心色票，並透過 Gemini AI 分析色彩意象。")
+    st.markdown("上傳一張圖片，利用 K-means 提取核心色票，並透過 Gemini AI 生成moodboard。")
 
     # --- 關鍵變動：從 st.secrets 讀取 API Key ---
     try:
@@ -281,7 +281,7 @@ def main():
 
     # 2. 執行分析
     with col2:
-        st.header("2. 色彩與意象分析")
+        st.header("2. 色彩與風格分析")
         
         # K-means 顏色提取
         with st.spinner(f'正在進行 K-means 顏色提取 (K={k_clusters})...'):
