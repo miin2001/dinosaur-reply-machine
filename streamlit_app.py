@@ -37,8 +37,30 @@ def get_gemini_client():
 
 def generate_dinosaur_parent_response(parent_message: str) -> str:
     """呼叫 Gemini API，根據家長訊息生成專業回覆。"""
-    st.session_state.status_message = "⏳ 正在將家長訊息送給 AI 老師處理..."
-    st.rerun() # 重新運行以更新狀態顯示
+    #st.session_state.status_message = "⏳ 正在將家長訊息送給 AI 老師處理..."
+    #st.rerun() # 重新運行以更新狀態顯示
+
+    # 使用 with 語句創建一個 Spinner
+    with st.spinner("⏳ AI 老師正在溫和地構思回覆..."):
+        client = get_gemini_client()
+        
+        config = types.GenerateContentConfig(
+            system_instruction=SYSTEM_INSTRUCTION,
+            temperature=0.6,
+        )
+
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=parent_message,
+                config=config,
+            )
+            # Spinner 會在 with 區塊結束後自動消失
+            return response.text
+            
+        except Exception as e:
+            st.error(f"❌ 處理失敗：{e}")
+            return "很抱歉，系統目前無法處理您的請求。"
 
     client = get_gemini_client()
     
@@ -68,15 +90,15 @@ def generate_dinosaur_parent_response(parent_message: str) -> str:
 st.set_page_config(page_title="🦖 恐龍家長專業回覆機", layout="wide")
 
 # 初始化 Session State 來儲存狀態和回覆
-if 'ai_reply' not in st.session_state:
-    st.session_state.ai_reply = "等待家長訊息中..."
-if 'status_message' not in st.session_state:
-    st.session_state.status_message = "準備就緒..."
+#if 'ai_reply' not in st.session_state:
+#   st.session_state.ai_reply = "等待家長訊息中..."
+#if 'status_message' not in st.session_state:
+#    st.session_state.status_message = "準備就緒..."
 
 st.title("🦖 恐龍家長專業回覆機 (Gemini AI)")
 
 # 顯示狀態
-st.markdown(f"**狀態:** <span style='color: #007bff; font-weight: bold;'>{st.session_state.status_message}</span>", unsafe_allow_html=True)
+#st.markdown(f"**狀態:** <span style='color: #007bff; font-weight: bold;'>{st.session_state.status_message}</span>", unsafe_allow_html=True)
 
 # 恐龍家長輸入區
 parent_message = st.text_area(
