@@ -99,7 +99,7 @@ if 'parent_emotion' not in st.session_state:
     st.session_state.parent_emotion = "未分析"
     st.session_state.emotion_icon = "❓"
 
-st.title("🦖 恐龍家長情緒分析與舒壓回覆機 (Gemini AI)")
+st.title("🦖 恐龍家長回覆機")
 st.markdown("---")
 
 
@@ -135,9 +135,11 @@ st.markdown("---")
 col1, col2 = st.columns([1, 2])
 
 # 情緒分析結果顯示 (左側)
+# 情緒分析結果顯示 (左側)
 with col1:
     st.subheader("家長情緒分析")
     
+    # ... (emotion_map 保持不變)
     emotion_map = {
         "憤怒": "🔴 怒火中燒", 
         "焦慮": "🟠 擔憂不安", 
@@ -159,14 +161,18 @@ with col1:
     elif "分析失敗" in st.session_state.parent_emotion:
         st.warning("情緒分析失敗。")
     else:
-        st.metric(
-            label="偵測到的主要情緒", 
-            value=display_emotion_text
+        # 使用 st.markdown 配合 CSS 調整字體大小
+        st.text("偵測到的主要情緒:") # 顯示 Label，使用正常大小的字體
+        
+        # 這裡設定字體大小為 18px (您可以根據需求調整這個數值，例如 20px, 24px)
+        st.markdown(
+            f'<p style="font-size: 18px; font-weight: bold; color: #FF4B4B;">{display_emotion_text}</p>', 
+            unsafe_allow_html=True
         )
 
 # AI 老師回覆區 (右側)
 with col2:
-    st.subheader("AI 老師的（內部舒壓用）回覆：")
+    st.subheader("AI 老師的回覆：")
     st.info(st.session_state.ai_reply)
 
 # 底部說明
